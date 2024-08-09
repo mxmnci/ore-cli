@@ -50,6 +50,24 @@ impl Miner {
         // Return error, if balance is zero
         self.check_balance().await;
 
+        // Calculate dynamic fee if enabled
+        let priority_fee = if self.dynamic_fee {
+            match self.dynamic_fee().await {
+                Ok(fee) => fee,
+                Err(err) => {
+                    println!(
+                        "  {} {} Falling back to static value: {} microlamports",
+                        "WARNING".bold().yellow(),
+                        err,
+                        self.priority_fee.unwrap_or(0)
+                    );
+                    self.priority_fee.unwrap_or(0)
+                }
+            }
+        } else {
+            self.priority_fee.unwrap_or(0)
+        };
+
         // Set compute budget
         let mut final_ixs = vec![];
         match compute_budget {
@@ -64,7 +82,7 @@ impl Miner {
 
         // Set compute unit price
         final_ixs.push(ComputeBudgetInstruction::set_compute_unit_price(
-            self.priority_fee.unwrap_or(0),
+            priority_fee,
         ));
 
         // Add in user instructions
@@ -273,7 +291,7 @@ impl Miner {
         //             sim_attempts += 1;
         //         }
         //     }
-
+        //
         //     // Abort if sim fails
         //     if sim_attempts.gt(&SIMULATION_RETRIES) {
         //         return Err(ClientError {
